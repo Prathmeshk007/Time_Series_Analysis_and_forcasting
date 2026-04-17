@@ -1,130 +1,125 @@
-﻿import streamlit as st
-import pandas as pd
-import matplotlib.pyplot as plt
+﻿import streamlit as st, pandas as pd, matplotlib.pyplot as plt
 from statsmodels.tsa.arima.model import ARIMA
 from statsmodels.tsa.stattools import adfuller
 from statsmodels.graphics.tsaplots import plot_acf, plot_pacf
 from datetime import datetime
 
-st.set_page_config(page_title="📈 Sales Forecast App", page_icon="💼", layout="wide")
-st.title("📈 Sales Forecast and Analysis App 📈")
-st.sidebar.title("Analysis and Prediction of Sales Data")
+st.set_page_config(page_title="📈 Sales Forecast", page_icon="💼", layout="wide")
+st.title("📈 Sales Forecast App")
 
-# --- Cached functions ---
-@st.cache_data
-def load_data():
-    d = pd.read_csv("sales.csv")
-    d["Date"] = pd.to_datetime(d["Date"])
-    d.set_index("Date", inplace=True)
-    return d
+if "page" not in st.session_state: st.session_state.page = "upload"
+if "data" not in st.session_state: st.session_state.data = None
 
-@st.cache_resource
-def fit_arima(series, order):
-    model = ARIMA(series, order=order)
-    return model.fit()
+def load_data(): return st.session_state.data
+def fit_arima(series, order): return ARIMA(series, order=order).fit()
 
-# --- Session state for navigation ---
-if "page" not in st.session_state:
-    st.session_state.page = None
 
-if st.sidebar.button("Overview of sales data"):
-    st.session_state.page = "overview"
-if st.sidebar.button("Stationarity Analysis"):
-    st.session_state.page = "stationarity"
-if st.sidebar.button("ARIMA MODEL"):
-    st.session_state.page = "ARIMA"
-if st.sidebar.button("Future Forecasting"):
-    st.session_state.page = "Future Forecasting"
+if st.sidebar.button("📁 Upload Data"): st.session_state.page = "upload"
+if st.sidebar.button("📊 Overview"): st.session_state.page = "overview"
+if st.sidebar.button("🔬 Stationarity"): st.session_state.page = "stationarity"
+if st.sidebar.button("🤖 ARIMA"): st.session_state.page = "ARIMA"
+if st.sidebar.button("🔮 Forecast"): st.session_state.page = "forecast"
 
-# --- Pages ---
-if st.session_state.page == "overview":
-    st.subheader("Sales Data")
+if st.session_state.page == "upload":
+    st.header("📁 Upload Data")
+    f = st.file_uploader("Choose CSV", type=['csv'])
+    if f:
+        df = pd.read_csv(f)
+        st.success("✅ Uploaded")
+        st.dataframe(df.head())
+        date_col = st.selectbox("Date Column", df.columns.tolist())
+        sales_col = st.selectbox("Sales Column", df.columns.tolist())
+        if st.button("Process", type="primary"):
+            try:
+                df[date_col] = pd.to_datetime(df[date_col])
+                df = df.sort_values(date_col)
+                df.set_index(date_col, inplace=True)
+                df = df[[sales_col]]
+                df.columns = ['Amount']
+                st.session_state.data = df
+                st.success("✅ Processed")
+            except Exception as e:
+                st.error(f"❌ Error: {str(e)}")
+    if st.button("Load Sample"):
+        try:
+            df = pd.read_csv("sales.csv")
+            df["Date"] = pd.to_datetime(df["Date"])
+            df.set_index("Date", inplace=True)
+            df = df[['Amount']]
+            st.session_state.data = df
+            st.success("✅ Loaded")
+        except: st.error("❌ Not found")
+
+elif st.session_state.page == "overview":
+    st.header("📊 Overview")
     d = load_data()
-    st.write(d.head(10))
-    st.divider()
-    st.subheader("Line Chart of Sales Data")
-    st.line_chart(d["Amount"])
-    st.divider()
-    st.subheader("Summary of Sales")
-    st.write(d.describe())
+    if d is not None and not d.empty:
+        c1,c2,c3,c4 = st.columns(4)
+        with c1: st.metric("Records", len(d))
+        with c2: st.metric("Avg", f"{d['Amount'].mean():.2f}")
+        with c3: st.metric("Total", f"{d['Amount'].sum():.2f}")
+        with c4: st.metric("Range", f"{d.index.min().date()}-{d.index.max().date()}")
+        st.dataframe(d.head())
+        st.line_chart(d["Amount"])
+        st.write(d.describe())
+    else: st.warning("⚠️ Upload data first")
 
 elif st.session_state.page == "stationarity":
-    st.subheader("Stationarity Analysis")
+    st.header("🔬 Stationarity")
     d = load_data()
-
-    # Differencing
-    d["1st_diff"] = d["Amount"].diff()
-    d["2nd_diff"] = d["1st_diff"].diff()
-    d["3rd_diff"] = d["2nd_diff"].diff()
-    d["4th_diff"] = d["3rd_diff"].diff()
-    d["5th_diff"] = d["4th_diff"].diff()
-
-    column = st.selectbox("Select column for ADF test", d.columns)
-
-    def adf_test(series, name="Series"):
-        result = adfuller(series.dropna())
-        st.write(f"ADF Statistic for {name}: {result[0]}")
-        st.write(f"p-value: {result[1]}")
-        if result[1] <= 0.05:
-            st.success(f"{name} → Data is stationary")
-        else:
-            st.warning(f"{name} → Data is not stationary")
-
-    if st.button("Run ADF Test"):
-        adf_test(d[column], name=column)
+    if d is not None and not d.empty:
+        col = st.selectbox("Column", d.columns.tolist())
+        if st.button("Apply Diff"):
+            d["1st_diff"] = d["Amount"].diff()
+            d["2nd_diff"] = d["1st_diff"].diff()
+            st.success("✅ Diff applied")
+        if st.button("Run ADF", type="primary"):
+            r = adfuller(d[col].dropna())
+            c1,c2 = st.columns(2)
+            with c1: st.metric("ADF Stat", f"{r[0]:.6f}")
+            with c2: st.metric("p-value", f"{r[1]:.6f}")
+            if r[1] <= 0.05: st.success("✅ Stationary")
+            else: st.warning("⚠️ Non-stationary")
+    else: st.warning("⚠️ Upload data first")
 
 elif st.session_state.page == "ARIMA":
-    st.subheader("ARIMA Modeling")
+    st.header("🤖 ARIMA")
     d = load_data()
+    if d is not None and not d.empty:
+        c1,c2,c3 = st.columns(3)
+        with c1: p = st.number_input("p", 0, 20, 1)
+        with c2: n = st.number_input("d", 0, 10, 1)
+        with c3: q = st.number_input("q", 0, 20, 1)
+        if st.button("Fit", type="primary"):
+            m = fit_arima(d["Amount"], (p,n,q))
+            st.success("✅ Fitted")
+            st.text(m.summary())
+            f = m.forecast(30)
+            c1,c2,c3,c4 = st.columns(4)
+            with c1: st.metric("Min", f"{f.min():.2f}")
+            with c2: st.metric("Max", f"{f.max():.2f}")
+            with c3: st.metric("Mean", f"{f.mean():.2f}")
+            with c4: st.metric("Growth", f"{((f.iloc[-1]/d['Amount'].iloc[-1])-1)*100:.1f}%")
+            st.dataframe(f)
+            st.line_chart(f)
+    else: st.warning("⚠️ Upload data first")
 
-    st.subheader("ACF Plots")
-    if st.button("SHOW ACF"):
-        fig1 = plt.figure(figsize=(6, 3))
-        plot_acf(d["Amount"].diff().dropna(), ax=plt.gca())
-        st.pyplot(fig1)
-
-    st.subheader("PACF Plots")
-    if st.button("Show PACF"):
-        fig2 = plt.figure(figsize=(6, 3))
-        plot_pacf(d["Amount"].diff().dropna(), ax=plt.gca())
-        st.pyplot(fig2)
-
-    # User inputs
-    p = st.number_input("Enter the value of p", min_value=0, max_value=20)
-    n = st.number_input("Enter the value of d", min_value=0, max_value=10)
-    q = st.number_input("Enter the value of q", min_value=0, max_value=20)
-
-    fitted_model = fit_arima(d["Amount"], (p, n, q))
-
-    st.subheader("Summary")
-    st.write(fitted_model.summary())
-    st.divider()
-
-    forecast = fitted_model.forecast(steps=30)
-    st.write("Forecasted values:")
-    st.write(forecast)
-    st.line_chart(forecast)
-
-elif st.session_state.page == "Future Forecasting":
-    st.subheader("Future Forecasting")
+elif st.session_state.page == "forecast":
+    st.header("🔮 Forecast")
     d = load_data()
-
-    # Fit fixed ARIMA model
-    model = fit_arima(d["Amount"], (17, 2, 3))
-
-    st.subheader("Line Chart of Actual vs Predicted Values")
-    st.write("The starting date for the prediction is 2003-01-01 and the ending date is 2008-12-01")
-    pred = model.predict(start=pd.to_datetime("2003-01-01"), end=pd.to_datetime("2008-12-01"))
-    d["predict"] = pred
-    st.line_chart(d[["Amount", "predict"]])
-
-    st.divider()
-    st.subheader("Line Chart of Future Forecasting")
-    sta = st.date_input("Select start date for future forecasting", value=datetime(2009, 1, 1))
-    ed = st.date_input("Select end date for future forecasting", value=datetime(2050, 12, 1))
-    pred1 = model.predict(start=pd.to_datetime(sta), end=pd.to_datetime(ed))
-    d["future_pred"] = pred1
-    st.line_chart(pred1)
-
-    st.subheader("Future Forecasting Values")
-    st.write(pred1)
+    if d is not None and not d.empty:
+        m = fit_arima(d["Amount"], (17,2,3))
+        c1,c2 = st.columns(2)
+        with c1: s = st.date_input("Start", datetime(2009,1,1))
+        with c2: e = st.date_input("End", datetime(2050,12,1))
+        if st.button("Forecast", type="primary"):
+            f = m.predict(start=pd.to_datetime(s), end=pd.to_datetime(e))
+            c1,c2,c3,c4 = st.columns(4)
+            with c1: st.metric("Min", f"{f.min():.2f}")
+            with c2: st.metric("Max", f"{f.max():.2f}")
+            with c3: st.metric("Avg", f"{f.mean():.2f}")
+            with c4: st.metric("Growth", f"{((f.iloc[-1]/d['Amount'].iloc[-1])-1)*100:.1f}%")
+            st.line_chart(f)
+            st.dataframe(f)
+            st.download_button("Download", f.to_csv(), "forecast.csv")
+    else: st.warning("⚠️ Upload data first")
