@@ -1,14 +1,12 @@
 ﻿# Sales Forecasting App
 
-Streamlit app for sales forecasting with ARIMA models.
+Streamlit app for sales forecasting with automated predictions.
 
 ## Features
 
 - Upload CSV data or use sample data
 - View sales statistics and trends
-- Stationarity analysis with ADF test
-- ARIMA modeling with custom parameters
-- Future forecasting with export option
+- Automated future forecasting with export option
 
 ## Requirements
 
@@ -38,9 +36,7 @@ streamlit run app_streamlit.py
 
 - Upload Data: Load your CSV file
 - Overview: View statistics and trends
-- Stationarity: ADF test for stationarity
-- ARIMA: Fit ARIMA models (p, d, q parameters)
-- Forecast: Generate future predictions
+- Forecast: Generate automated future predictions
 
 ## Files
 
