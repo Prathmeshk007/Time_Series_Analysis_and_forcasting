@@ -1,4 +1,5 @@
-﻿# Sales Forecasting App
+link=https://codealphataskdiseasepredictionml-kbp8cckngwfex6uobhwtlf.streamlit.app
+ # Sales Forecasting App
 
 Streamlit app for sales forecasting with automated predictions.
 
